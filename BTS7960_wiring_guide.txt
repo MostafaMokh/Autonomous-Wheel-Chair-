@@ -1,0 +1,27 @@
+BTS7960 wiring guide (2 drivers, one per motor)
+
+Left motor driver:
+- RPWM -> Arduino D5
+- LPWM -> Arduino D6
+- R_EN -> Arduino D7
+- L_EN -> Arduino D8
+- VCC  -> Arduino 5V
+- GND  -> Arduino GND
+- M+ / M- -> Left DC motor terminals
+- B+ / B- -> Motor power supply
+
+Right motor driver:
+- RPWM -> Arduino D9
+- LPWM -> Arduino D10
+- R_EN -> Arduino D11
+- L_EN -> Arduino D12
+- VCC  -> Arduino 5V
+- GND  -> Arduino GND
+- M+ / M- -> Right DC motor terminals
+- B+ / B- -> Motor power supply
+
+Important:
+- Do NOT connect the DC motors directly to the Arduino pins.
+- All grounds must be common: Arduino GND + BTS7960 GND + battery negative.
+- If a motor spins in the opposite direction, swap M+ and M- for that motor
+  OR reverse RPWM/LPWM logic in code.

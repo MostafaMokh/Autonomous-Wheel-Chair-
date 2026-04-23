@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>BTS7960 Wheelchair Logic Simulator</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; background: #f5f7fb; color: #1f2937; }
+    .wrap { max-width: 1100px; margin: 24px auto; padding: 0 16px; }
+    h1 { font-size: 28px; margin-bottom: 8px; }
+    p { line-height: 1.5; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; }
+    .card { background: white; border-radius: 16px; padding: 16px; box-shadow: 0 8px 24px rgba(0,0,0,0.08); }
+    .controls { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+    button {
+      padding: 10px 14px; border: none; border-radius: 12px; cursor: pointer;
+      background: #111827; color: white; font-size: 15px;
+    }
+    button:hover { opacity: .92; }
+    .board { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; align-items: center; margin-top: 16px; }
+    .block { background: #eef2ff; border: 1px solid #c7d2fe; border-radius: 14px; padding: 14px; min-height: 180px; }
+    .motor { background: #ecfeff; border-color: #a5f3fc; }
+    .driver { background: #fef3c7; border-color: #fcd34d; }
+    .arduino { background: #dcfce7; border-color: #86efac; }
+    .label { font-size: 13px; color: #6b7280; margin-bottom: 6px; }
+    .big { font-size: 22px; font-weight: 700; }
+    .state { margin-top: 10px; padding: 10px; border-radius: 10px; background: #f9fafb; border: 1px solid #e5e7eb; }
+    .on { color: #047857; font-weight: 700; }
+    .off { color: #9ca3af; font-weight: 700; }
+    .arrow { font-size: 26px; }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .mono { font-family: Consolas, monospace; background: #111827; color: #e5e7eb; padding: 12px; border-radius: 12px; white-space: pre-wrap; }
+    @media (max-width: 900px) {
+      .row, .board, .grid2 { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>BTS7960 + Arduino Logic Simulator</h1>
+    <p>This is a visual logic simulator for your wheelchair code. It shows what each BTS7960 output is doing when you send <b>F</b>, <b>L</b>, <b>R</b>, or <b>S</b>. It helps verify the code logic before real hardware testing.</p>
+
+    <div class="card">
+      <div class="big">Send Command</div>
+      <div class="controls">
+        <button onclick="applyCmd('F')">F = Forward</button>
+        <button onclick="applyCmd('L')">L = Left</button>
+        <button onclick="applyCmd('R')">R = Right</button>
+        <button onclick="applyCmd('S')">S = Stop</button>
+      </div>
+      <div class="state" id="summary">Current command: S (Stopped)</div>
+    </div>
+
+    <div class="board">
+      <div class="block arduino">
+        <div class="label">Arduino Uno</div>
+        <div class="big">Pins</div>
+        <div class="mono">Left Driver
+D5  -> L_RPWM
+D6  -> L_LPWM
+D7  -> L_REN
+D8  -> L_LEN
+
+Right Driver
+D9  -> R_RPWM
+D10 -> R_LPWM
+D11 -> R_REN
+D12 -> R_LEN</div>
+      </div>
+
+      <div class="block driver">
+        <div class="label">Left BTS7960</div>
+        <div class="big">Driver State</div>
+        <div class="state">R_EN: <span id="lren"></span></div>
+        <div class="state">L_EN: <span id="llen"></span></div>
+        <div class="state">RPWM: <span id="lrpwm"></span></div>
+        <div class="state">LPWM: <span id="llpwm"></span></div>
+      </div>
+
+      <div class="block motor">
+        <div class="label">Left DC Motor</div>
+        <div class="big" id="lmotor">Stopped</div>
+        <div class="arrow" id="larrow">⏹</div>
+      </div>
+
+      <div class="block driver">
+        <div class="label">Right BTS7960</div>
+        <div class="big">Driver State</div>
+        <div class="state">R_EN: <span id="rren"></span></div>
+        <div class="state">L_EN: <span id="rlen"></span></div>
+        <div class="state">RPWM: <span id="rrpwm"></span></div>
+        <div class="state">LPWM: <span id="rlpwm"></span></div>
+      </div>
+
+      <div class="block motor">
+        <div class="label">Right DC Motor</div>
+        <div class="big" id="rmotor">Stopped</div>
+        <div class="arrow" id="rarrow">⏹</div>
+      </div>
+
+      <div class="block">
+        <div class="label">How turning works</div>
+        <div class="mono">F: Left motor forward + Right motor forward
+L: Left motor stop    + Right motor forward
+R: Left motor forward + Right motor stop
+S: Both motors stop</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function spanState(id, value) {
+      const el = document.getElementById(id);
+      el.textContent = value;
+      el.className = value === 'HIGH' || value === '180' ? 'on' : 'off';
+    }
+
+    function applyCmd(cmd) {
+      // enables always HIGH in this logic example
+      spanState('lren', 'HIGH');
+      spanState('llen', 'HIGH');
+      spanState('rren', 'HIGH');
+      spanState('rlen', 'HIGH');
+
+      let s = '';
+      if (cmd === 'F') {
+        spanState('lrpwm', '180');
+        spanState('llpwm', '0');
+        spanState('rrpwm', '180');
+        spanState('rlpwm', '0');
+        document.getElementById('lmotor').textContent = 'Forward';
+        document.getElementById('rmotor').textContent = 'Forward';
+        document.getElementById('larrow').textContent = '➡';
+        document.getElementById('rarrow').textContent = '➡';
+        s = 'Current command: F (Both motors forward)';
+      } else if (cmd === 'L') {
+        spanState('lrpwm', '0');
+        spanState('llpwm', '0');
+        spanState('rrpwm', '180');
+        spanState('rlpwm', '0');
+        document.getElementById('lmotor').textContent = 'Stopped';
+        document.getElementById('rmotor').textContent = 'Forward';
+        document.getElementById('larrow').textContent = '⏹';
+        document.getElementById('rarrow').textContent = '➡';
+        s = 'Current command: L (Left motor stop, right motor forward)';
+      } else if (cmd === 'R') {
+        spanState('lrpwm', '180');
+        spanState('llpwm', '0');
+        spanState('rrpwm', '0');
+        spanState('rlpwm', '0');
+        document.getElementById('lmotor').textContent = 'Forward';
+        document.getElementById('rmotor').textContent = 'Stopped';
+        document.getElementById('larrow').textContent = '➡';
+        document.getElementById('rarrow').textContent = '⏹';
+        s = 'Current command: R (Left motor forward, right motor stop)';
+      } else {
+        spanState('lrpwm', '0');
+        spanState('llpwm', '0');
+        spanState('rrpwm', '0');
+        spanState('rlpwm', '0');
+        document.getElementById('lmotor').textContent = 'Stopped';
+        document.getElementById('rmotor').textContent = 'Stopped';
+        document.getElementById('larrow').textContent = '⏹';
+        document.getElementById('rarrow').textContent = '⏹';
+        s = 'Current command: S (Stopped)';
+      }
+      document.getElementById('summary').textContent = s;
+    }
+    applyCmd('S');
+  </script>
+</body>
+</html>
